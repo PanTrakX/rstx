@@ -16,7 +16,9 @@ class Rstx():
 
     class Request():
 
+        addr:       tuple
         raw:        str
+        raw_r:      str
         raw_header: str
         raw_body:   str
         method:     str
@@ -30,6 +32,7 @@ class Rstx():
             self.raw_header, self.raw_body = request_string.split('\r\n\r\n')
             for index, line in enumerate(self.raw_header.split('\r\n')):
                 if index == 0:
+                    self.raw_r = line
                     self.header['method'], \
                         self.header['path'], \
                         self.header['protocol'] = line.split(' ')
@@ -48,7 +51,7 @@ class Rstx():
     bind_ip:    str
     bind_port:  int
 
-    routes = {}  # key, value = path, callback_func
+    routes:     dict = {}  # key, value = path, callback_func
 
     HTTP_VERSION = 'HTTP/1.1'
 
@@ -124,34 +127,66 @@ class Rstx():
         self.routes[path] = func
 
     def run(self, bind_ip='0.0.0.0', bind_port=9996) -> None:
+        print('|=================|')
+        print('|   RSTX SERVER   |')
+        print('|=================|')
+        print('[ HI ] Starting the RSTX server!')
+        print('Creating the socket...')
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind((bind_ip, bind_port))
-        s.listen(10)
+        print('[ OK ] Socket created!')
+        print('Setting the socket to be reusable...')
+
+        if s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) is None:
+            print('[ OK ] Socket set to reusable!')
+        else:
+            print('[ ERR ] Socket cannot be set to reusable!')
+        print(f'Binding the socket to {bind_ip}:{bind_port}...')
+
+        if s.bind((bind_ip, bind_port)) is None:
+            print(f'[ OK ] Socket bound to {bind_ip}:{bind_port}!')
+        else:
+            print(f'[ ERR ] Socket cannot bind to {bind_ip}:{bind_port}!')
+
+        print('Settings to accept connections...')
+        if s.listen() is None:
+            print('[ OK ] Accepting connections!')
+        else:
+            print('[ ERR ] Cant accept connections!')
+
+        print()
+
         try:
             while True:
-                client, _ = s.accept()
+                client, addr = s.accept()
                 thread = threading.Thread(
                     target=self._client_handler,
-                    args=(client, ))
+                    args=(client, addr, ))
                 thread.start()
         except KeyboardInterrupt:
             print('Closing the socket...')
             s.close()
             print('[ OK ] Socket closed!')
-            print('[ BYE ] Shuting down!')
+            print('[ BYE ] Shuting down the RSTX server!')
 
-    def _client_handler(self, client) -> None:
+    def _client_handler(self, client, addr) -> None:
         request = self.Request()
+        request.addr = addr
         request._parse(client.recv(4096).decode())
+
         try:
             response_body, status = self.routes[request.header['path']](
                 request)
-            response = self.HTTP_VERSION + ' ' + \
+            response_status = self.HTTP_VERSION + ' ' + \
                 self.STATUS_RESPONSE[status] + '\r\n'
-            response += 'Content-Type: application/json\r\n\r\n' + \
-                json.dumps(response_body)
+            response_headers = 'Content-Type: application/json\r\n\r\n'
+            response_body = json.dumps(response_body)
+            response = response_status + response_headers + response_body
         except KeyError:  # If it can't find the path, return 404!
-            response = 'HTTP/1.1 404 Not Found\r\n\r\n'
+            response_status = self.HTTP_VERSION + ' ' + \
+                self.STATUS_RESPONSE[404] + '\r\n\r\n'
+            response = response_status
+
+        print(
+            f'[{request.addr[0]}:{request.addr[1]}]  ->  [{request.raw_r}]  ->  [{response_status}]')
         client.send(response.encode())
         client.close()
