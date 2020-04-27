@@ -1,5 +1,5 @@
 """
-RSTX (pronounced rest-x) is a simple flexible web rest framework for fast protyping and debbuging!
+RSTX (pronounced rest-x) is a simple flexible web rest framework for fast prototyping and debugging!
 It currently supports only JSON format!
 NOT READY FOR PRODUCTION
 """
@@ -11,7 +11,7 @@ import json
 
 class Rstx():
     """
-    The main class for an rstx (pronouced: rest-x) application!
+    The main class for an rstx application!
     """
 
     class Request():
@@ -151,7 +151,7 @@ class Rstx():
                 self.STATUS_RESPONSE[status] + "\r\n"
             response += "Content-Type: application/json\r\n\r\n" + \
                 json.dumps(response_body)
-        except KeyError:  # If it cant find the path, return 404!
+        except KeyError:  # If it can't find the path, return 404!
             response = "HTTP/1.1 404 Not Found\r\n\r\n"
         client.send(response.encode())
         client.close()
