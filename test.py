@@ -15,6 +15,10 @@ def re(r):
     return r.header, 200
 
 
+def le(r):
+    return {'len': len(r.raw)}, 200
+
+
 def api(r):
 
     if r.method == 'GET':
@@ -46,6 +50,7 @@ x.add_route('/api/', api)
 x.add_route('/something/', something)
 x.add_route('/teapot/', teapot)
 x.add_route('/r/', re)
+x.add_route('/le/', le)
 
 if __name__ == "__main__":
     x.run()

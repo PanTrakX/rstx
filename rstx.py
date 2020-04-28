@@ -4,59 +4,69 @@ It currently supports only JSON format!
 NOT READY FOR PRODUCTION
 """
 
+import json
 import socket
 import threading
-import json
+
+
+class Request():
+
+    ##############
+    # PROPERTIES #
+    ##############
+
+    addr:       tuple
+    raw:        str
+    raw_r:      str
+    raw_header: str
+    raw_body:   str
+    method:     str
+    path:       str
+    protocol:   str
+    header:     dict = {}
+    body:       dict = {}
+
+    ###########
+    # METHODS #
+    ###########
+
+    def __str__(self) -> str:
+        return self.raw
+
+    def _parse(self, request_string: str) -> None:
+        self.raw = request_string
+        self.raw_header, self.raw_body = request_string.split('\r\n\r\n', 1)
+
+        for index, line in enumerate(self.raw_header.split('\r\n')):
+            if index == 0:
+                self.raw_r = line
+                method, path, protocol = line.split()
+                self.header['method'] = self.method = method
+                self.header['path'] = self.path = path
+                self.header['protocol'] = self.protocol = protocol
+            else:
+                self.header[line.split(':')[0]] = line.split(':')[1].strip()
+
+        try:
+            self.body = json.loads(self.raw_body)
+        except json.JSONDecodeError:
+            self.body = {}
 
 
 class Rstx():
     """
-    The main class for an rstx application!
+    The class for an RSTX application!
     """
 
-    class Request():
+    ##############
+    # PROPERTIES #
+    ##############
 
-        addr:       tuple
-        raw:        str
-        raw_r:      str
-        raw_header: str
-        raw_body:   str
-        method:     str
-        path:       str
-        protocol:   str
-        header:     dict = {}
-        body:       dict = {}
-
-        def _parse(self, request_string: str) -> None:
-            self.raw = request_string
-            self.raw_header, self.raw_body = request_string.split('\r\n\r\n')
-            for index, line in enumerate(self.raw_header.split('\r\n')):
-                if index == 0:
-                    self.raw_r = line
-                    self.header['method'], \
-                        self.header['path'], \
-                        self.header['protocol'] = line.split(' ')
-                    self.method = self.header['method']
-                    self.path = self.header['path']
-                    self.protocol = self.header['protocol']
-                else:
-                    self.header[line.split(':')[0]] = line.split(':')[
-                        1].strip()
-
-            self.body = json.loads(self.raw_body)
-
-        def __str__(self):
-            return self.raw
-
-    # PROPERTIES
-
-    bind_ip:    str
-    bind_port:  int
-
-    routes:     dict = {}  # key, value = path, callback_func
+    _bind_ip:    str
+    _bind_port:  int
+    _routes:     dict = {}
 
     HTTP_VERSION = 'HTTP/1.1'
-
     STATUS_RESPONSE = {
         100: '100 Continue',
         101: '101 Switching Protocols',
@@ -120,34 +130,39 @@ class Rstx():
         507: '507 Insufficient Storage',
         508: '508 Loop Detected',
         510: '510 Not Extended',
-        511: '511 Network Authentication Required'
-    }
+        511: '511 Network Authentication Required'}
 
-   # METHODS
+    ###########
+    # METHODS #
+    ###########
 
-    def add_route(self, path, func) -> None:
-        self.routes[path] = func
+    def add_route(self, path: str, func: tuple) -> None:
+        self._routes[path] = func
 
-    def run(self, bind_ip='0.0.0.0', bind_port=9996) -> None:
+    def run(self, bind_ip: str = '0.0.0.0', bind_port: int = 9996) -> None:
+        self._bind_ip = bind_ip
+        self._bind_port = bind_port
+
         print('|=================|')
         print('|   RSTX SERVER   |')
         print('|=================|')
         print('[ HI ] Starting the RSTX server!')
+
         print('Creating the socket...')
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         print('[ OK ] Socket created!')
-        print('Setting the socket to be reusable...')
 
+        print('Setting the socket to be reusable...')
         if s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) is None:
             print('[ OK ] Socket set to reusable!')
         else:
             print('[ ERR ] Socket cannot be set to reusable!')
-        print(f'Binding the socket to {bind_ip}:{bind_port}...')
 
-        if s.bind((bind_ip, bind_port)) is None:
-            print(f'[ OK ] Socket bound to {bind_ip}:{bind_port}!')
+        print(f'Binding the socket to {self._bind_ip}:{self._bind_port}...')
+        if s.bind((self._bind_ip, self._bind_port)) is None:
+            print(f'[ OK ] Socket bound to {self._bind_ip}:{self._bind_port}!')
         else:
-            print(f'[ ERR ] Socket cannot bind to {bind_ip}:{bind_port}!')
+            print(f'[ ERR ] Socket cannot bind to {self._bind_ip}:{self._bind_port}!')
 
         print('Settings to accept connections...')
         if s.listen() is None:
@@ -160,10 +175,7 @@ class Rstx():
         try:
             while True:
                 client, addr = s.accept()
-                thread = threading.Thread(
-                    target=self._client_handler,
-                    args=(client, addr, ))
-                thread.start()
+                threading.Thread(target=self._client_handler, args=(client, addr)).start()
         except KeyboardInterrupt:
             print('Closing the socket...')
             s.close()
@@ -171,25 +183,22 @@ class Rstx():
             print('[ BYE ] Shuting down the RSTX server!')
 
     def _client_handler(self, client, addr) -> None:
-        request = self.Request()
+        client_request = client.recv(4096).decode()
+        request = Request()
         request.addr = addr
-        request._parse(client.recv(4096).decode())
+        request._parse(client_request)
 
         try:
-            response_body, status = self.routes[request.header['path']](
-                request)
-            response_status = self.HTTP_VERSION + \
-                ' ' + self.STATUS_RESPONSE[status]
+            response_body, status = self._routes[request.header['path']](request)
+            response_status = f'{self.HTTP_VERSION} {self.STATUS_RESPONSE[status]}'
             response_headers = 'Content-Type: application/json'
             response_body = json.dumps(response_body)
-            response = response_status + '\r\n' + \
-                response_headers + '\r\n\r\n' + response_body
-        except KeyError:  # If it can't find the path, return 404!
-            response_status = self.HTTP_VERSION + ' ' + \
-                self.STATUS_RESPONSE[404]
+            response = f'{response_status}\r\n{response_headers}\r\n\r\n{response_body}'
+        except KeyError:  # return 404 Not Found
+            response_status = f'{self.HTTP_VERSION} {self.STATUS_RESPONSE[404]}'
             response = response_status + '\r\n\r\n'
 
-        print(
-            f'[{request.addr[0]}:{request.addr[1]}]  ->  [{request.raw_r}]  ->  [{response_status}]')
+        print(f'[{request.addr[0]}:{request.addr[1]}]  ->  [{request.raw_r}]  ->  [{response_status}]')
+
         client.send(response.encode())
         client.close()
