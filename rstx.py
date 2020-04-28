@@ -43,6 +43,8 @@ class Rstx():
                     self.header[line.split(':')[0]] = line.split(':')[
                         1].strip()
 
+            self.body = json.loads(self.raw_body)
+
         def __str__(self):
             return self.raw
 
@@ -176,15 +178,16 @@ class Rstx():
         try:
             response_body, status = self.routes[request.header['path']](
                 request)
-            response_status = self.HTTP_VERSION + ' ' + \
-                self.STATUS_RESPONSE[status] + '\r\n'
-            response_headers = 'Content-Type: application/json\r\n\r\n'
+            response_status = self.HTTP_VERSION + \
+                ' ' + self.STATUS_RESPONSE[status]
+            response_headers = 'Content-Type: application/json'
             response_body = json.dumps(response_body)
-            response = response_status + response_headers + response_body
+            response = response_status + '\r\n' + \
+                response_headers + '\r\n\r\n' + response_body
         except KeyError:  # If it can't find the path, return 404!
             response_status = self.HTTP_VERSION + ' ' + \
-                self.STATUS_RESPONSE[404] + '\r\n\r\n'
-            response = response_status
+                self.STATUS_RESPONSE[404]
+            response = response_status + '\r\n\r\n'
 
         print(
             f'[{request.addr[0]}:{request.addr[1]}]  ->  [{request.raw_r}]  ->  [{response_status}]')

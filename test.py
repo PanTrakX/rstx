@@ -16,7 +16,13 @@ def re(r):
 
 
 def api(r):
-    return {"API?": "YES"}, 201
+
+    if r.method == 'GET':
+        return {"API": "YES"}, 200
+
+    if r.method == 'POST':
+        print(r.body)
+        return r.body, 200
 
 
 def something(r):
