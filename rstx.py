@@ -191,9 +191,10 @@ class Rstx():
         try:
             response_body, status = self._routes[request.header['path']](request)
             response_status = f'{self.HTTP_VERSION} {self.STATUS_RESPONSE[status]}'
-            response_headers = 'Content-Type: application/json'
+            response_headers = 'Content-Type: application/json\r\n'
+            response_headers += 'Server: RSTX\r\n'
             response_body = json.dumps(response_body)
-            response = f'{response_status}\r\n{response_headers}\r\n\r\n{response_body}'
+            response = f'{response_status}\r\n{response_headers}\r\n{response_body}'
         except KeyError:  # return 404 Not Found
             response_status = f'{self.HTTP_VERSION} {self.STATUS_RESPONSE[404]}'
             response = response_status + '\r\n\r\n'
